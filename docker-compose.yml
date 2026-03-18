@@ -1,0 +1,47 @@
+services:
+  # Base de Datos
+  db:
+    image: postgres:17-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=nutri_user
+      - POSTGRES_PASSWORD=nutri_pass
+      - POSTGRES_DB=nutrivision_db
+
+  # Broker
+  redis:
+    image: redis:7-alpine
+
+  # FastAPI
+  backend:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://nutri_user:nutri_pass@db:5432/nutrivision_db
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/code
+    depends_on:
+      - db
+      - redis
+
+  # Worker Celery
+  worker:
+    build: .
+    command: python -m celery -A app.worker.celery_app worker --loglevel=info
+    volumes:
+      - .:/code
+    environment:
+      - DATABASE_URL=postgresql://nutri_user:nutri_pass@db:5432/nutrivision_db
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/code
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  postgres_data:
